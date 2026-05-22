@@ -9,9 +9,18 @@ const BACKGROUND_COLOR = 0xa0a0a0;
 const VIEW_TARGET_Y = 1.15;
 
 type ScreenMaterial = THREE.MeshBasicMaterial & { map: THREE.HTMLTexture | null };
+type ScreenPoint = { x: number; y: number };
+type DragState = {
+  pointerId: number;
+  offsetX: number;
+  offsetY: number;
+  width: number;
+  height: number;
+};
 
 export function mountMacBookScene(container: HTMLElement, sourceElement: HTMLElement): () => void {
   const status = document.getElementById('scene-status');
+  const glassWindow = sourceElement.querySelector<HTMLElement>('.glass-window');
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setClearColor(BACKGROUND_COLOR, 1);
@@ -90,6 +99,10 @@ export function mountMacBookScene(container: HTMLElement, sourceElement: HTMLEle
 
   const interactions = new InteractionManager();
   interactions.connect(renderer, camera);
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+  const screenMeshes: THREE.Mesh[] = [];
+  let dragState: DragState | null = null;
 
   const loader = new GLTFLoader();
   loader.load(MACBOOK_MODEL_URL, (gltf) => {
@@ -107,6 +120,7 @@ export function mountMacBookScene(container: HTMLElement, sourceElement: HTMLEle
       if (isScreen) {
         foundScreen = true;
         object.material = screenMaterial;
+        screenMeshes.push(object);
         interactions.add(object);
       }
     });
@@ -128,6 +142,128 @@ export function mountMacBookScene(container: HTMLElement, sourceElement: HTMLEle
     console.error('Failed to load MacBook model', error);
     if (status) status.textContent = 'Failed to load MacBook model.';
   });
+
+  const getCanvasCssSize = () => {
+    const style = getComputedStyle(sourceElement);
+    return {
+      width: parseFloat(style.width) || sourceElement.clientWidth || 1536,
+      height: parseFloat(style.height) || sourceElement.clientHeight || 1024,
+    };
+  };
+
+  const getElementBox = (element: HTMLElement) => {
+    const sourceSize = getCanvasCssSize();
+    const style = getComputedStyle(element);
+    const width = element.getBoundingClientRect().width || parseFloat(style.width) || 0;
+    const height = element.getBoundingClientRect().height || parseFloat(style.height) || parseFloat(style.minHeight) || 0;
+    const left = parseFloat(style.left) || 0;
+    const top = parseFloat(style.top) || 0;
+    const maxLeft = Math.max(0, sourceSize.width - width);
+    const maxTop = Math.max(0, sourceSize.height - height);
+
+    return {
+      left: THREE.MathUtils.clamp(left, 0, maxLeft),
+      top: THREE.MathUtils.clamp(top, 0, maxTop),
+      width,
+      height,
+      maxLeft,
+      maxTop,
+    };
+  };
+
+  const getScreenPointFromPointer = (event: PointerEvent): ScreenPoint | null => {
+    if (screenMeshes.length === 0) return null;
+
+    const rect = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+
+    const intersections = raycaster.intersectObjects(screenMeshes, false);
+    const hit = intersections.find((intersection) => intersection.uv);
+    if (!hit?.uv) return null;
+
+    const sourceSize = getCanvasCssSize();
+    return {
+      x: THREE.MathUtils.clamp(hit.uv.x * sourceSize.width, 0, sourceSize.width),
+      y: THREE.MathUtils.clamp((1 - hit.uv.y) * sourceSize.height, 0, sourceSize.height),
+    };
+  };
+
+  const isInsideGlassWindow = (point: ScreenPoint) => {
+    if (!glassWindow) return false;
+
+    const box = getElementBox(glassWindow);
+    return point.x >= box.left
+      && point.x <= box.left + box.width
+      && point.y >= box.top
+      && point.y <= box.top + box.height;
+  };
+
+  const requestSourcePaint = () => {
+    const paintableSource = sourceElement as HTMLElement & { requestPaint?: () => void };
+    paintableSource.requestPaint?.();
+  };
+
+  const moveGlassWindow = (point: ScreenPoint) => {
+    if (!glassWindow || !dragState) return;
+
+    const nextLeft = THREE.MathUtils.clamp(point.x - dragState.offsetX, 0, Math.max(0, getCanvasCssSize().width - dragState.width));
+    const nextTop = THREE.MathUtils.clamp(point.y - dragState.offsetY, 0, Math.max(0, getCanvasCssSize().height - dragState.height));
+
+    glassWindow.style.left = `${nextLeft}px`;
+    glassWindow.style.top = `${nextTop}px`;
+    requestSourcePaint();
+  };
+
+  const onPointerDown = (event: PointerEvent) => {
+    if (!glassWindow || event.button !== 0) return;
+
+    const point = getScreenPointFromPointer(event);
+    if (!point || !isInsideGlassWindow(point)) return;
+
+    const box = getElementBox(glassWindow);
+    dragState = {
+      pointerId: event.pointerId,
+      offsetX: point.x - box.left,
+      offsetY: point.y - box.top,
+      width: box.width,
+      height: box.height,
+    };
+
+    controls.enabled = false;
+    renderer.domElement.setPointerCapture(event.pointerId);
+    renderer.domElement.style.cursor = 'grabbing';
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+
+  const onPointerMove = (event: PointerEvent) => {
+    if (!dragState || event.pointerId !== dragState.pointerId) return;
+
+    const point = getScreenPointFromPointer(event);
+    if (point) moveGlassWindow(point);
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+
+  const stopDrag = (event: PointerEvent) => {
+    if (!dragState || event.pointerId !== dragState.pointerId) return;
+
+    dragState = null;
+    controls.enabled = true;
+    renderer.domElement.style.cursor = '';
+    if (renderer.domElement.hasPointerCapture(event.pointerId)) {
+      renderer.domElement.releasePointerCapture(event.pointerId);
+    }
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+
+  renderer.domElement.addEventListener('pointerdown', onPointerDown, true);
+  renderer.domElement.addEventListener('pointermove', onPointerMove, true);
+  renderer.domElement.addEventListener('pointerup', stopDrag, true);
+  renderer.domElement.addEventListener('pointercancel', stopDrag, true);
 
   let width = 0;
   let height = 0;
@@ -172,6 +308,10 @@ export function mountMacBookScene(container: HTMLElement, sourceElement: HTMLEle
     cancelAnimationFrame(raf);
     resizeObserver.disconnect();
     interactions.disconnect();
+    renderer.domElement.removeEventListener('pointerdown', onPointerDown, true);
+    renderer.domElement.removeEventListener('pointermove', onPointerMove, true);
+    renderer.domElement.removeEventListener('pointerup', stopDrag, true);
+    renderer.domElement.removeEventListener('pointercancel', stopDrag, true);
     controls.dispose();
     htmlTexture.dispose();
     screenMaterial.dispose();
