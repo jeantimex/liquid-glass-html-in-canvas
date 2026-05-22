@@ -87,7 +87,8 @@ export class LiquidGlassCanvas {
     const H = this.canvas.height;
     if (W === 0 || H === 0 || !this.drawElementImage || !this._initialized) return;
 
-    this.ctx.reset();
+    // IMPORTANT: Clear the canvas with a clean transparent slate
+    this.ctx.clearRect(0, 0, W, H);
 
     const dpr = window.devicePixelRatio || 1;
     const canvasRect = this.canvas.getBoundingClientRect();
@@ -96,23 +97,49 @@ export class LiquidGlassCanvas {
     const glassElements = Array.from(this.canvas.querySelectorAll('.liquid-glass')) as HTMLElement[];
     const glassSet = new Set(glassElements);
 
+    if (allChildren.length === 0 && !(this as any).__lg_warn_empty) {
+      console.warn('LiquidGlass: No children found inside the canvas to render.');
+      (this as any).__lg_warn_empty = true;
+    }
+
     // Draw all non-glass elements first (they form the background)
     for (const child of allChildren) {
       if (!glassSet.has(child)) {
         const el = child as HTMLElement;
         const pos = this._getElementPosition(el, canvasRect);
+        
+        // Skip elements with zero size
+        if (pos.w <= 0 || pos.h <= 0) continue;
+
         const x = pos.x * dpr;
         const y = pos.y * dpr;
-        const transform = this.drawElementImage(child, x, y);
-        if (transform) {
-          el.style.transform = transform.toString();
+
+        try {
+          const transform = this.drawElementImage(child, x, y);
+          if (transform) {
+            el.style.transform = transform.toString();
+          }
+        } catch (e: any) {
+          // Log only once per element to avoid flooding
+          if (!(child as any).__lg_error_logged) {
+            console.warn(`LiquidGlass: Failed to draw background element ${child.tagName}.${child.className}:`, e.message || e);
+            (child as any).__lg_error_logged = true;
+          }
         }
       }
     }
 
     // Apply glass effects to .liquid-glass elements
+    // Even if background elements failed, we must try to render the glass panels
     for (const glassEl of glassElements) {
-      this._renderGlassElement(glassEl as HTMLElement, canvasRect, dpr);
+      try {
+        this._renderGlassElement(glassEl as HTMLElement, canvasRect, dpr);
+      } catch (e: any) {
+        if (!(glassEl as any).__lg_error_logged_glass) {
+          console.error(`LiquidGlass: Failed to render glass effect for ${glassEl.tagName}.${glassEl.className}:`, e.message || e);
+          (glassEl as any).__lg_error_logged_glass = true;
+        }
+      }
     }
   }
 
@@ -268,13 +295,18 @@ export class LiquidGlassCanvas {
    * - Grid positioning
    * - Complex calc() expressions
    */
-  private _getElementPosition(element: HTMLElement, canvasRect: DOMRect): { x: number; y: number; w: number; h: number } {
+  private _getElementPosition(element: HTMLElement, _canvasRect: DOMRect): { x: number; y: number; w: number; h: number } {
     const style = getComputedStyle(element);
+    
+    // Use the canvas CSS dimensions for layout math (DPR-independent)
+    const canvasW = parseFloat(getComputedStyle(this.canvas).width) || this.canvas.width || 1536;
+    const canvasH = parseFloat(getComputedStyle(this.canvas).height) || this.canvas.height || 1024;
+
+    // We still need the element's size. If getBoundingClientRect is 0,0 due to the layoutsubtree,
+    // we fallback to computed styles.
     const rect = element.getBoundingClientRect();
-    const w = rect.width;
-    const h = rect.height;
-    const canvasW = canvasRect.width;
-    const canvasH = canvasRect.height;
+    const w = rect.width || parseFloat(style.width) || 0;
+    const h = rect.height || parseFloat(style.height) || 0;
 
     let x = 0;
     let y = 0;
@@ -373,17 +405,24 @@ export class LiquidGlassCanvas {
 
     // Run the glass shader. The renderer owns size/cache management; forcing a
     // resize here invalidates GPU resources every paint and causes resize flicker.
-    this.renderer.uploadAndBlur(this.sceneCanvas, 0, 0, renderW, renderH, config.blurAmount);
     this.renderer.clear();
+    this.renderer.uploadAndBlur(this.sceneCanvas, 0, 0, renderW, renderH, config.blurAmount);
     this.renderer.renderGlassPanel(config, cssW, cssH, dpr);
 
     // Draw the glass effect onto the canvas at canvas pixel coordinates
     this.ctx.drawImage(this.renderer.canvas, 0, 0, padW, padH, padX, padY, padW, padH);
 
     // Draw the element content on top
-    const transform = this.drawElementImage(element, canvasX, canvasY);
-    if (transform) {
-      element.style.transform = transform.toString();
+    try {
+      const transform = this.drawElementImage(element, canvasX, canvasY);
+      if (transform) {
+        element.style.transform = transform.toString();
+      }
+    } catch (e) {
+      if (!(element as any).__lg_error_logged) {
+        console.warn(`LiquidGlass: Failed to draw glass element ${element.tagName}.${element.className}:`, e);
+        (element as any).__lg_error_logged = true;
+      }
     }
   }
 

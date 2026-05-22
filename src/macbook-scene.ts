@@ -10,7 +10,7 @@ const VIEW_TARGET_Y = 1.15;
 
 type ScreenMaterial = THREE.MeshBasicMaterial & { map: THREE.HTMLTexture | null };
 
-export function mountMacBookScene(container: HTMLElement, screenElement: HTMLElement): () => void {
+export function mountMacBookScene(container: HTMLElement, sourceElement: HTMLElement): () => void {
   const status = document.getElementById('scene-status');
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -79,9 +79,8 @@ export function mountMacBookScene(container: HTMLElement, screenElement: HTMLEle
   }
   scene.add(grid);
 
-  const htmlTexture = new THREE.HTMLTexture(screenElement);
+  const htmlTexture = new THREE.CanvasTexture(sourceElement as HTMLCanvasElement);
   htmlTexture.colorSpace = THREE.SRGBColorSpace;
-  htmlTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
 
   const screenMaterial: ScreenMaterial = new THREE.MeshBasicMaterial({
     map: htmlTexture,
@@ -157,6 +156,9 @@ export function mountMacBookScene(container: HTMLElement, screenElement: HTMLEle
   const render = () => {
     if (disposed) return;
 
+    if (typeof (sourceElement as any).requestPaint === 'function') {
+      (sourceElement as any).requestPaint();
+    }
     htmlTexture.needsUpdate = true;
     interactions.update();
     controls.update();
