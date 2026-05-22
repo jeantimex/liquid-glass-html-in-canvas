@@ -1,14 +1,19 @@
 import { mountMacBookScene } from './macbook-scene';
 import { LiquidGlassCanvas } from './liquid-glass';
+import { mountLiquidGlassGui } from './liquid-glass-gui';
 
 const sceneRoot = document.getElementById('scene-root');
-const htmlSource = document.getElementById('html-source') as HTMLCanvasElement;
+const htmlSource = document.getElementById('html-source');
 
-if (!sceneRoot || !htmlSource) {
+if (!sceneRoot || !(htmlSource instanceof HTMLCanvasElement)) {
   throw new Error('Missing scene root or html-source element');
 }
 
-const lg = new LiquidGlassCanvas(htmlSource);
+const sceneContainer: HTMLElement = sceneRoot;
+const sourceCanvas: HTMLCanvasElement = htmlSource;
+
+const lg = new LiquidGlassCanvas(sourceCanvas);
+mountLiquidGlassGui(sourceCanvas);
 
 async function init() {
   const success = await lg.waitForInit();
@@ -18,15 +23,15 @@ async function init() {
   const baseHeight = 1024;
   
   // Set physical pixels based on DPR for high-quality rendering
-  htmlSource.width = baseWidth * dpr;
-  htmlSource.height = baseHeight * dpr;
+  sourceCanvas.width = baseWidth * dpr;
+  sourceCanvas.height = baseHeight * dpr;
   
   // Keep CSS size at the base dimensions
-  htmlSource.style.width = `${baseWidth}px`;
-  htmlSource.style.height = `${baseHeight}px`;
+  sourceCanvas.style.width = `${baseWidth}px`;
+  sourceCanvas.style.height = `${baseHeight}px`;
 
   if (success) {
-    htmlSource.onpaint = () => {
+    (sourceCanvas as HTMLCanvasElement & { onpaint?: () => void }).onpaint = () => {
       lg.render();
     };
   } else {
@@ -41,12 +46,12 @@ async function init() {
   // Give the browser a moment to stabilize the layout/paint cache for the experimental API
   await new Promise((resolve) => setTimeout(resolve, 100));
 
-  mountMacBookScene(sceneRoot, htmlSource);
+  mountMacBookScene(sceneContainer, sourceCanvas);
 
   // Kickstart the paint loop
   function loop() {
-    if ((htmlSource as any).requestPaint) {
-      (htmlSource as any).requestPaint();
+    if ((sourceCanvas as any).requestPaint) {
+      (sourceCanvas as any).requestPaint();
     }
     requestAnimationFrame(loop);
   }

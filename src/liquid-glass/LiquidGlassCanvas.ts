@@ -15,6 +15,14 @@ export { DEFAULTS, CSS_PROPERTY_MAP, SHADOW_PAD };
 export type { GlassConfig };
 
 type DrawElementImageFn = (element: Element, dx: number, dy: number) => DOMMatrix | undefined;
+type RestorableStyleProperty =
+  | 'background'
+  | 'backgroundColor'
+  | 'backgroundImage'
+  | 'borderColor'
+  | 'boxShadow'
+  | 'filter'
+  | 'outlineColor';
 
 export class LiquidGlassCanvas {
   readonly canvas: HTMLCanvasElement;
@@ -412,9 +420,10 @@ export class LiquidGlassCanvas {
     // Draw the glass effect onto the canvas at canvas pixel coordinates
     this.ctx.drawImage(this.renderer.canvas, 0, 0, padW, padH, padX, padY, padW, padH);
 
-    // Draw the element content on top
+    // Draw the element content on top. The shader already owns the panel
+    // background, edge, and shadow, so suppress the element chrome for this pass.
     try {
-      const transform = this.drawElementImage(element, canvasX, canvasY);
+      const transform = this._drawGlassElementContent(element, canvasX, canvasY);
       if (transform) {
         element.style.transform = transform.toString();
       }
@@ -423,6 +432,51 @@ export class LiquidGlassCanvas {
         console.warn(`LiquidGlass: Failed to draw glass element ${element.tagName}.${element.className}:`, e);
         (element as any).__lg_error_logged = true;
       }
+    }
+  }
+
+  private _drawGlassElementContent(element: HTMLElement, x: number, y: number): DOMMatrix | undefined {
+    if (!this.drawElementImage) return undefined;
+
+    const saved = this._suppressGlassChrome(element);
+
+    try {
+      return this.drawElementImage(element, x, y);
+    } finally {
+      this._restoreInlineStyles(element, saved);
+    }
+  }
+
+  private _suppressGlassChrome(element: HTMLElement): Map<RestorableStyleProperty, string> {
+    const saved = new Map<RestorableStyleProperty, string>();
+    const properties: RestorableStyleProperty[] = [
+      'background',
+      'backgroundColor',
+      'backgroundImage',
+      'borderColor',
+      'boxShadow',
+      'filter',
+      'outlineColor',
+    ];
+
+    for (const property of properties) {
+      saved.set(property, element.style[property]);
+    }
+
+    element.style.background = 'transparent';
+    element.style.backgroundColor = 'transparent';
+    element.style.backgroundImage = 'none';
+    element.style.borderColor = 'transparent';
+    element.style.boxShadow = 'none';
+    element.style.filter = 'none';
+    element.style.outlineColor = 'transparent';
+
+    return saved;
+  }
+
+  private _restoreInlineStyles(element: HTMLElement, saved: Map<RestorableStyleProperty, string>): void {
+    for (const [property, value] of saved) {
+      element.style[property] = value;
     }
   }
 
