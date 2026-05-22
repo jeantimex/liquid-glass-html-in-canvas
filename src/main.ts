@@ -51,6 +51,36 @@ requestAnimationFrame(loop);
 // Handle canvas resize - use device pixel dimensions for sharp rendering
 let currentWidth = 0;
 let currentHeight = 0;
+let pendingWidth = 0;
+let pendingHeight = 0;
+let resizeFrame = 0;
+const resizeSnapshot = document.createElement('canvas');
+const resizeSnapshotCtx = resizeSnapshot.getContext('2d')!;
+
+function applyCanvasSize(width: number, height: number) {
+  if (width <= 0 || height <= 0 || (width === currentWidth && height === currentHeight)) return;
+
+  const hadPreviousFrame = currentWidth > 0 && currentHeight > 0;
+  if (hadPreviousFrame) {
+    resizeSnapshot.width = currentWidth;
+    resizeSnapshot.height = currentHeight;
+    resizeSnapshotCtx.clearRect(0, 0, currentWidth, currentHeight);
+    resizeSnapshotCtx.drawImage(canvas, 0, 0);
+  }
+
+  currentWidth = width;
+  currentHeight = height;
+  canvas.width = width;
+  canvas.height = height;
+
+  // Changing canvas.width/height clears the backing store. Keep the previous
+  // frame visible until html-in-canvas delivers the next paint record.
+  if (hadPreviousFrame) {
+    ctx.drawImage(resizeSnapshot, 0, 0, resizeSnapshot.width, resizeSnapshot.height, 0, 0, width, height);
+  }
+
+  (canvas as ExtendedCanvas).requestPaint?.();
+}
 
 new ResizeObserver(([entry]) => {
   // Use devicePixelContentBoxSize for sharp rendering on high-DPI screens
@@ -66,13 +96,15 @@ new ResizeObserver(([entry]) => {
     newHeight = Math.round(entry.contentRect.height * dpr);
   }
 
-  // Only resize if dimensions actually changed
-  if (newWidth !== currentWidth || newHeight !== currentHeight) {
-    currentWidth = newWidth;
-    currentHeight = newHeight;
-    canvas.width = newWidth;
-    canvas.height = newHeight;
-  }
+  pendingWidth = newWidth;
+  pendingHeight = newHeight;
+
+  if (resizeFrame) return;
+
+  resizeFrame = requestAnimationFrame(() => {
+    resizeFrame = 0;
+    applyCanvasSize(pendingWidth, pendingHeight);
+  });
 }).observe(canvas, { box: 'device-pixel-content-box' });
 
 // GUI Controls for liquid glass effect

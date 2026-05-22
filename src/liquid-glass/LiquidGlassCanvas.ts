@@ -368,9 +368,12 @@ export class LiquidGlassCanvas {
     // Capture the current canvas content behind where the glass will be
     this._captureRegion(padX, padY, padW, padH);
 
-    // Run the glass shader
-    this.renderer.resize(Math.round(padW), Math.round(padH));
-    this.renderer.uploadAndBlur(this.sceneCanvas, 0, 0, Math.round(padW), Math.round(padH), config.blurAmount);
+    const renderW = Math.round(padW);
+    const renderH = Math.round(padH);
+
+    // Run the glass shader. The renderer owns size/cache management; forcing a
+    // resize here invalidates GPU resources every paint and causes resize flicker.
+    this.renderer.uploadAndBlur(this.sceneCanvas, 0, 0, renderW, renderH, config.blurAmount);
     this.renderer.clear();
     this.renderer.renderGlassPanel(config, cssW, cssH, dpr);
 

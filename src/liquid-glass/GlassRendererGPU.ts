@@ -251,6 +251,8 @@ export class GlassRendererGPU {
   }
 
   resize(width: number, height: number): void {
+    if (this.width === width && this.height === height) return;
+
     this.width = width;
     this.height = height;
     for (const targets of this.targetCache.values()) {
@@ -258,8 +260,6 @@ export class GlassRendererGPU {
     }
     this.targetCache.clear();
     this.activeTargets = null;
-    this.canvas.width = 0;
-    this.canvas.height = 0;
   }
 
   uploadAndBlur(
@@ -466,7 +466,7 @@ export class GlassRendererGPU {
     pass.setPipeline(this.glassPipeline!);
     pass.setBindGroup(0, bindGroup);
     pass.setVertexBuffer(0, this.panelBuffer!);
-    pass.setViewport(0, this.canvas.height - H, W, H, 0, 1);
+    pass.setViewport(0, 0, W, H, 0, 1);
     pass.draw(4);
     pass.end();
 
@@ -485,7 +485,7 @@ export class GlassRendererGPU {
         clearValue: { r: 0, g: 0, b: 0, a: 0 },
       }],
     });
-    pass.setViewport(0, this.canvas.height - this.height, this.width, this.height, 0, 1);
+    pass.setViewport(0, 0, this.width, this.height, 0, 1);
     pass.end();
 
     this.device.queue.submit([encoder.finish()]);
