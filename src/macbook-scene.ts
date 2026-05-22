@@ -23,7 +23,7 @@ export function mountMacBookScene(container: HTMLElement, screenElement: HTMLEle
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(BACKGROUND_COLOR);
-  scene.fog = new THREE.Fog(BACKGROUND_COLOR, 4, 20);
+  scene.fog = new THREE.Fog(BACKGROUND_COLOR, 14, 32);
 
   const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 100);
   camera.position.set(0, 1.1, 8.2);
