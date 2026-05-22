@@ -7,6 +7,7 @@ Apply beautiful liquid glass effects to HTML elements rendered inside a canvas u
 ## Features
 
 - Apple-style liquid glass effect with blur, refraction, and chromatic aberration
+- **WebGPU-powered** rendering for high performance
 - Works with the experimental `layoutsubtree` canvas and `drawElementImage()` API
 - Configure effects via CSS custom properties
 - Supports device pixel ratio for sharp rendering on high-DPI displays
@@ -14,11 +15,20 @@ Apply beautiful liquid glass effects to HTML elements rendered inside a canvas u
 
 ## Requirements
 
-This project uses the experimental html-in-canvas API which is currently only available in Chrome with a flag enabled:
+This project requires two experimental features:
 
+### 1. html-in-canvas API
+Currently only available in Chrome with a flag enabled:
 1. Open `chrome://flags`
 2. Search for "Experimental Web Platform features"
 3. Enable it and restart Chrome
+
+### 2. WebGPU
+WebGPU is required for rendering the glass effects. It's supported in:
+- Chrome 113+ (enabled by default)
+- Edge 113+
+- Firefox Nightly (with flag)
+- Safari 17+ (macOS Sonoma / iOS 17)
 
 ## Installation
 
@@ -85,6 +95,9 @@ import { LiquidGlassCanvas } from './liquid-glass';
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
 const liquidGlass = new LiquidGlassCanvas(canvas);
 
+// Wait for WebGPU initialization (optional but recommended)
+await liquidGlass.waitForInit();
+
 // Set up the paint handler
 canvas.onpaint = () => {
   liquidGlass.render();
@@ -117,7 +130,32 @@ new ResizeObserver(([entry]) => {
 const liquidGlass = new LiquidGlassCanvas(canvas: HTMLCanvasElement);
 ```
 
+Creates a new liquid glass renderer. WebGPU initialization happens asynchronously in the background.
+
+#### Properties
+
+##### `isReady: boolean`
+
+Returns `true` if WebGPU is initialized and ready for rendering.
+
+```typescript
+if (liquidGlass.isReady) {
+  // WebGPU is ready
+}
+```
+
 #### Methods
+
+##### `waitForInit(): Promise<boolean>`
+
+Waits for WebGPU initialization to complete. Returns `true` if successful, `false` if WebGPU is not available.
+
+```typescript
+const success = await liquidGlass.waitForInit();
+if (!success) {
+  console.error('WebGPU not available');
+}
+```
 
 ##### `render()`
 
@@ -147,7 +185,7 @@ canvas.onpaint = () => {
 
 ##### `destroy()`
 
-Cleans up WebGL resources:
+Cleans up WebGPU resources:
 
 ```typescript
 liquidGlass.destroy();
@@ -273,13 +311,21 @@ Configure the glass effect using CSS custom properties on `.liquid-glass` elemen
     const canvas = document.getElementById('canvas');
     const lg = new LiquidGlassCanvas(canvas);
 
-    canvas.onpaint = () => lg.render();
+    // Wait for WebGPU to initialize
+    lg.waitForInit().then(success => {
+      if (!success) {
+        console.error('WebGPU not available');
+        return;
+      }
+      
+      canvas.onpaint = () => lg.render();
 
-    function loop() {
-      canvas.requestPaint?.();
+      function loop() {
+        canvas.requestPaint?.();
+        requestAnimationFrame(loop);
+      }
       requestAnimationFrame(loop);
-    }
-    requestAnimationFrame(loop);
+    });
 
     new ResizeObserver(([entry]) => {
       if (entry.devicePixelContentBoxSize) {
@@ -297,8 +343,16 @@ Configure the glass effect using CSS custom properties on `.liquid-glass` elemen
 
 1. **Layout**: Elements inside the `layoutsubtree` canvas are laid out by CSS but not painted to the screen
 2. **Background Capture**: For each `.liquid-glass` element, the library captures the canvas content behind it
-3. **WebGL Processing**: The captured region is processed through WebGL shaders that apply blur, refraction, chromatic aberration, and other effects
+3. **WebGPU Processing**: The captured region is processed through WebGPU shaders (written in WGSL) that apply blur, refraction, chromatic aberration, and other effects
 4. **Compositing**: The glass effect is drawn to the canvas, followed by the element's content on top
+
+### Shader Pipeline
+
+The rendering uses three WGSL shaders:
+
+1. **Blit Shader** (`blit.wgsl`) - Copies and transforms textures
+2. **Blur Shader** (`blur.wgsl`) - 9-tap Gaussian blur (multi-pass for quality)
+3. **Glass Shader** (`glass.wgsl`) - The main liquid glass effect with refraction, specular highlights, fresnel, shadows, and more
 
 ## Supported CSS Positioning
 
@@ -361,7 +415,13 @@ For these cases, use absolute positioning with explicit coordinates, or wait for
 
 ## Browser Support
 
-Currently requires Chrome with the "Experimental Web Platform features" flag enabled.
+Requires both:
+- **html-in-canvas API**: Chrome with "Experimental Web Platform features" flag enabled
+- **WebGPU**: Chrome 113+, Edge 113+, Safari 17+, or Firefox Nightly with WebGPU flag
+
+## Credits
+
+This project is inspired by and builds upon the work of [ybouane/liquidglass](https://github.com/ybouane/liquidglass), which provides the original liquid glass shader implementation. The core glass effect algorithms (refraction, chromatic aberration, fresnel, specular highlights) are adapted from that project.
 
 ## License
 
