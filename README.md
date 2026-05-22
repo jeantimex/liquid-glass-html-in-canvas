@@ -300,6 +300,65 @@ Configure the glass effect using CSS custom properties on `.liquid-glass` elemen
 3. **WebGL Processing**: The captured region is processed through WebGL shaders that apply blur, refraction, chromatic aberration, and other effects
 4. **Compositing**: The glass effect is drawn to the canvas, followed by the element's content on top
 
+## Supported CSS Positioning
+
+> **Note:** The experimental html-in-canvas API currently has a limitation where `getBoundingClientRect()` returns `(0, 0)` for all elements inside a `layoutsubtree` canvas. As a workaround, this library parses CSS styles directly to compute element positions. When the API matures and reports correct positions, this workaround will be simplified.
+
+The library automatically handles element positioning from CSS. Supported patterns:
+
+| Pattern | Example | Notes |
+|---------|---------|-------|
+| Pixel values | `top: 40px; left: 24px` | Basic positioning |
+| Percentage values | `top: 50%; left: 25%` | Relative to canvas size |
+| `calc()` expressions | `top: calc(50% - 20px)` | Basic add/subtract operations |
+| Right/Bottom positioning | `right: 24px; bottom: 24px` | Position from opposite edge |
+| Horizontal centering | `left: 0; right: 0; margin: 0 auto` | Auto-detected |
+| Vertical centering | `top: 0; bottom: 0; margin: auto 0` | Auto-detected |
+| Transform translate | `transform: translate(-50%, -50%)` | Including percentage values |
+| Combined centering | `top: 50%; left: 50%; transform: translate(-50%, -50%)` | Common centering pattern |
+
+### Centering Examples
+
+```css
+/* Horizontal center at top */
+.centered-top {
+  position: absolute;
+  top: 40px;
+  left: 0;
+  right: 0;
+  width: fit-content;
+  margin: 0 auto;
+}
+
+/* Absolute center using transform */
+.absolute-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Bottom right corner */
+.bottom-right {
+  position: absolute;
+  right: 24px;
+  bottom: 24px;
+}
+```
+
+### Not Currently Supported
+
+The following CSS positioning patterns are not supported (would require reimplementing the browser's CSS layout engine):
+
+- Flexbox positioning (`display: flex`, `justify-content`, `align-items`)
+- Grid positioning (`display: grid`, `grid-template-*`)
+- Complex `calc()` expressions (only basic add/subtract supported)
+- Percentage margins
+- `position: relative` with offset
+- `position: sticky`
+
+For these cases, use absolute positioning with explicit coordinates, or wait for the html-in-canvas API to mature and properly report element positions.
+
 ## Browser Support
 
 Currently requires Chrome with the "Experimental Web Platform features" flag enabled.

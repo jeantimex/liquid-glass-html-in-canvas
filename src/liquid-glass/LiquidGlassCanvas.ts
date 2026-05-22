@@ -111,8 +111,126 @@ export class LiquidGlassCanvas {
   }
 
   /**
-   * Computes element position from CSS styles since getBoundingClientRect
-   * may not reflect CSS positioning for layoutsubtree canvas children.
+   * Parses a CSS length value, supporting px, %, and calc().
+   */
+  private _parseCSSLength(value: string, reference: number): number {
+    if (!value || value === 'auto') return NaN;
+
+    value = value.trim();
+
+    // Handle calc() expressions
+    if (value.startsWith('calc(')) {
+      return this._parseCalc(value, reference);
+    }
+
+    // Handle percentage
+    if (value.endsWith('%')) {
+      return (parseFloat(value) / 100) * reference;
+    }
+
+    // Handle pixel values (or other units that parseFloat can handle)
+    return parseFloat(value) || 0;
+  }
+
+  /**
+   * Parses a basic calc() expression like calc(50% - 20px) or calc(100% - 50px).
+   */
+  private _parseCalc(calc: string, reference: number): number {
+    // Extract the expression inside calc()
+    const match = calc.match(/calc\((.+)\)/);
+    if (!match) return 0;
+
+    const expr = match[1].trim();
+
+    // Handle simple expressions: value1 +/- value2
+    const addMatch = expr.match(/(.+)\s*\+\s*(.+)/);
+    const subMatch = expr.match(/(.+)\s*-\s*(.+)/);
+
+    if (subMatch) {
+      const left = this._parseCSSLength(subMatch[1].trim(), reference);
+      const right = this._parseCSSLength(subMatch[2].trim(), reference);
+      return left - right;
+    }
+
+    if (addMatch) {
+      const left = this._parseCSSLength(addMatch[1].trim(), reference);
+      const right = this._parseCSSLength(addMatch[2].trim(), reference);
+      return left + right;
+    }
+
+    // Single value
+    return this._parseCSSLength(expr, reference);
+  }
+
+  /**
+   * Parses CSS transform to extract translate values.
+   * Supports translate(), translateX(), translateY(), translate3d().
+   */
+  private _parseTransform(transform: string, elementW: number, elementH: number): { tx: number; ty: number } {
+    let tx = 0;
+    let ty = 0;
+
+    if (!transform || transform === 'none') return { tx, ty };
+
+    // Handle translate(x, y) or translate(x)
+    const translateMatch = transform.match(/translate\(\s*([^,)]+)(?:\s*,\s*([^)]+))?\s*\)/);
+    if (translateMatch) {
+      tx = this._parseTranslateValue(translateMatch[1], elementW);
+      ty = translateMatch[2] ? this._parseTranslateValue(translateMatch[2], elementH) : 0;
+    }
+
+    // Handle translateX(x)
+    const translateXMatch = transform.match(/translateX\(\s*([^)]+)\s*\)/);
+    if (translateXMatch) {
+      tx = this._parseTranslateValue(translateXMatch[1], elementW);
+    }
+
+    // Handle translateY(y)
+    const translateYMatch = transform.match(/translateY\(\s*([^)]+)\s*\)/);
+    if (translateYMatch) {
+      ty = this._parseTranslateValue(translateYMatch[1], elementH);
+    }
+
+    // Handle translate3d(x, y, z)
+    const translate3dMatch = transform.match(/translate3d\(\s*([^,]+)\s*,\s*([^,]+)\s*,\s*[^)]+\s*\)/);
+    if (translate3dMatch) {
+      tx = this._parseTranslateValue(translate3dMatch[1], elementW);
+      ty = this._parseTranslateValue(translate3dMatch[2], elementH);
+    }
+
+    return { tx, ty };
+  }
+
+  /**
+   * Parses a translate value, handling percentages (relative to element size).
+   */
+  private _parseTranslateValue(value: string, elementSize: number): number {
+    value = value.trim();
+    if (value.endsWith('%')) {
+      return (parseFloat(value) / 100) * elementSize;
+    }
+    return parseFloat(value) || 0;
+  }
+
+  /**
+   * Computes element position from CSS styles.
+   *
+   * NOTE: This is a workaround for the experimental html-in-canvas API.
+   * Currently, getBoundingClientRect() returns (0, 0) for all elements inside
+   * a layoutsubtree canvas. When the API matures and reports correct positions,
+   * this method can be simplified to just use getBoundingClientRect().
+   *
+   * Supports:
+   * - top, bottom, left, right (px and %)
+   * - margin (px)
+   * - calc() expressions (basic add/subtract)
+   * - transform: translate() for positioning adjustments
+   * - Centering with left: 0; right: 0; margin: auto
+   *
+   * Not supported (would require reimplementing CSS layout engine):
+   * - Flexbox positioning
+   * - Grid positioning
+   * - Complex calc() expressions
    */
   private _getElementPosition(element: HTMLElement, canvasRect: DOMRect): { x: number; y: number; w: number; h: number } {
     const style = getComputedStyle(element);
@@ -125,37 +243,60 @@ export class LiquidGlassCanvas {
     let x = 0;
     let y = 0;
 
-    // Handle horizontal positioning
-    const left = style.left;
-    const right = style.right;
-    const leftVal = parseFloat(left) || 0;
-    const rightVal = parseFloat(right) || 0;
+    // Get raw CSS values (not computed) for percentage detection
+    const inlineStyle = element.style;
+    const leftRaw = inlineStyle.left || style.left;
+    const rightRaw = inlineStyle.right || style.right;
+    const topRaw = inlineStyle.top || style.top;
+    const bottomRaw = inlineStyle.bottom || style.bottom;
 
-    // Check for centering: left: 0, right: 0 with auto margins centers the element
-    // When both left and right are 0 (or equal), element is horizontally centered
-    if (left !== 'auto' && right !== 'auto' && leftVal === 0 && rightVal === 0) {
-      // Centered horizontally
+    // Parse position values
+    const leftVal = this._parseCSSLength(leftRaw, canvasW);
+    const rightVal = this._parseCSSLength(rightRaw, canvasW);
+    const topVal = this._parseCSSLength(topRaw, canvasH);
+    const bottomVal = this._parseCSSLength(bottomRaw, canvasH);
+
+    const marginLeft = parseFloat(style.marginLeft) || 0;
+    const marginRight = parseFloat(style.marginRight) || 0;
+    const marginTop = parseFloat(style.marginTop) || 0;
+    const marginBottom = parseFloat(style.marginBottom) || 0;
+
+    // Handle horizontal positioning
+    const hasLeft = !isNaN(leftVal);
+    const hasRight = !isNaN(rightVal);
+
+    // Check for centering: left: 0, right: 0 (or both equal) with auto margins
+    if (hasLeft && hasRight && leftVal === 0 && rightVal === 0) {
       x = (canvasW - w) / 2;
-    } else if (left !== 'auto' && left !== '') {
-      x = leftVal + (parseFloat(style.marginLeft) || 0);
-    } else if (right !== 'auto' && right !== '') {
-      x = canvasW - w - rightVal - (parseFloat(style.marginRight) || 0);
+    } else if (hasLeft && hasRight) {
+      // Both left and right specified - element stretches, position from left
+      x = leftVal + marginLeft;
+    } else if (hasLeft) {
+      x = leftVal + marginLeft;
+    } else if (hasRight) {
+      x = canvasW - w - rightVal - marginRight;
     }
 
     // Handle vertical positioning
-    const top = style.top;
-    const bottom = style.bottom;
-    const topVal = parseFloat(top) || 0;
-    const bottomVal = parseFloat(bottom) || 0;
+    const hasTop = !isNaN(topVal);
+    const hasBottom = !isNaN(bottomVal);
 
     // Check for vertical centering
-    if (top !== 'auto' && bottom !== 'auto' && topVal === 0 && bottomVal === 0) {
+    if (hasTop && hasBottom && topVal === 0 && bottomVal === 0) {
       y = (canvasH - h) / 2;
-    } else if (top !== 'auto' && top !== '') {
-      y = topVal + (parseFloat(style.marginTop) || 0);
-    } else if (bottom !== 'auto' && bottom !== '') {
-      y = canvasH - h - bottomVal - (parseFloat(style.marginBottom) || 0);
+    } else if (hasTop && hasBottom) {
+      // Both top and bottom specified - element stretches, position from top
+      y = topVal + marginTop;
+    } else if (hasTop) {
+      y = topVal + marginTop;
+    } else if (hasBottom) {
+      y = canvasH - h - bottomVal - marginBottom;
     }
+
+    // Apply CSS transform translate if present
+    const { tx, ty } = this._parseTransform(style.transform, w, h);
+    x += tx;
+    y += ty;
 
     return { x, y, w, h };
   }
