@@ -3,9 +3,11 @@
  *
  * Detects elements with the `.liquid-glass` class inside a layoutsubtree canvas
  * and applies glass effects using CSS custom properties for configuration.
+ *
+ * Uses WebGPU for rendering.
  */
 
-import { GlassRenderer } from './GlassRenderer';
+import { GlassRendererGPU } from './GlassRendererGPU';
 import { DEFAULTS, CSS_PROPERTY_MAP, SHADOW_PAD } from './defaults';
 import type { GlassConfig } from './defaults';
 
@@ -17,15 +19,17 @@ type DrawElementImageFn = (element: Element, dx: number, dy: number) => DOMMatri
 export class LiquidGlassCanvas {
   readonly canvas: HTMLCanvasElement;
   readonly ctx: CanvasRenderingContext2D;
-  private readonly renderer: GlassRenderer;
+  private renderer: GlassRendererGPU;
   private readonly sceneCanvas: HTMLCanvasElement;
   private readonly sceneCtx: CanvasRenderingContext2D;
   private readonly drawElementImage: DrawElementImageFn | null;
+  private _initPromise: Promise<boolean>;
+  private _initialized = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
-    this.renderer = new GlassRenderer();
+    this.renderer = new GlassRendererGPU();
     this.sceneCanvas = document.createElement('canvas');
     this.sceneCtx = this.sceneCanvas.getContext('2d')!;
 
@@ -34,6 +38,39 @@ export class LiquidGlassCanvas {
       drawElement?: DrawElementImageFn;
     };
     this.drawElementImage = ctx.drawElementImage?.bind(ctx) ?? ctx.drawElement?.bind(ctx) ?? null;
+
+    this._initPromise = this._initWebGPU();
+  }
+
+  private async _initWebGPU(): Promise<boolean> {
+    try {
+      const success = await this.renderer.init();
+      if (success) {
+        this._initialized = true;
+        console.log('LiquidGlass: WebGPU renderer initialized');
+        return true;
+      } else {
+        console.error('LiquidGlass: WebGPU not available');
+        return false;
+      }
+    } catch (e) {
+      console.error('LiquidGlass: WebGPU init failed', e);
+      return false;
+    }
+  }
+
+  /**
+   * Returns true if WebGPU is initialized and ready.
+   */
+  get isReady(): boolean {
+    return this._initialized;
+  }
+
+  /**
+   * Wait for WebGPU initialization to complete.
+   */
+  async waitForInit(): Promise<boolean> {
+    return this._initPromise;
   }
 
   /**
@@ -48,7 +85,7 @@ export class LiquidGlassCanvas {
   render(): void {
     const W = this.canvas.width;
     const H = this.canvas.height;
-    if (W === 0 || H === 0 || !this.drawElementImage) return;
+    if (W === 0 || H === 0 || !this.drawElementImage || !this._initialized) return;
 
     this.ctx.reset();
 
@@ -98,12 +135,11 @@ export class LiquidGlassCanvas {
   renderGlassElements(): void {
     const W = this.canvas.width;
     const H = this.canvas.height;
-    if (W === 0 || H === 0 || !this.drawElementImage) return;
+    if (W === 0 || H === 0 || !this.drawElementImage || !this._initialized) return;
 
     const dpr = window.devicePixelRatio || 1;
     const canvasRect = this.canvas.getBoundingClientRect();
 
-    // Note: caller should have already scaled the context by DPR if needed
     const glassElements = this.canvas.querySelectorAll('.liquid-glass');
     for (const glassEl of glassElements) {
       this._renderGlassElement(glassEl as HTMLElement, canvasRect, dpr);
