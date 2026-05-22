@@ -3,122 +3,231 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Liquid Glass + HTML-in-Canvas</title>
+    <title>MacBook HTML Texture Demo</title>
     <style>
-      html {
-        height: 100%;
-      }
-
+      html,
       body {
-        display: block;
-        position: relative;
         width: 100%;
         height: 100%;
         margin: 0;
         overflow: hidden;
-        background: #07070d;
-        color: #f0f0f0;
-        font-family: system-ui, -apple-system, sans-serif;
+        background: #a0a0a0;
+        color: #111111;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
 
       * {
         box-sizing: border-box;
       }
 
-      #canvas {
-        position: absolute;
+      #scene-root {
+        position: fixed;
         inset: 0;
+        z-index: 1;
+        background: #a0a0a0;
+      }
+
+      .macbook-scene {
         width: 100%;
         height: 100%;
         display: block;
       }
 
-      /* Background image */
-      .background {
+      #html-source {
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: 1536px;
+        height: 1024px;
+        border: 0;
+        pointer-events: none;
+        transform: scale(0.01);
+        transform-origin: top left;
+        z-index: 0;
+      }
+
+      #computer-screen {
         position: absolute;
         inset: 0;
-        width: 100%;
-        height: 100%;
-      }
-
-      .background img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-      }
-
-      /* Glass panel content styling */
-      #content {
-        position: absolute;
-        top: 40px;
-        left: 0;
-        right: 0;
-        width: fit-content;
-        margin: 0 auto;
-        padding: 1rem 2rem;
-        font-size: clamp(1.25rem, 3vw, 2rem);
-        font-weight: 700;
-        letter-spacing: -0.02em;
+        width: 1536px;
+        height: 1024px;
+        overflow: hidden;
+        background: #11131b url("/assets/background.png") center / cover no-repeat;
         color: white;
-        line-height: 1.1;
-        white-space: nowrap;
-        transform-origin: 0 0;
+        isolation: isolate;
       }
 
-      /* Liquid glass styling via CSS custom properties */
-      .liquid-glass {
-        --lg-blur: 0.15;
-        --lg-refraction: 0.7;
-        --lg-corner-radius: 32;
-        --lg-z-radius: 28;
-        --lg-chrom-aberration: 0.06;
-        --lg-edge-highlight: 0.08;
-        --lg-fresnel: 1.2;
-        --lg-shadow-opacity: 0.35;
-        --lg-shadow-spread: 15;
+      .desktop-sheen {
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(circle at 22% 20%, rgba(255, 255, 255, 0.24), transparent 26%),
+          linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 45%);
+        pointer-events: none;
       }
 
-      /* GitHub link styling */
-      #github-link {
+      .desktop-bar {
         position: absolute;
         left: 24px;
-        bottom: 24px;
+        right: 24px;
+        top: 22px;
+        height: 54px;
         display: flex;
         align-items: center;
-        gap: 8px;
-        padding: 12px 20px;
-        color: #fff;
-        text-decoration: none;
-        font-size: 14px;
-        font-weight: 600;
-        --lg-corner-radius: 24;
-        --lg-z-radius: 20;
-        --lg-blur: 0.2;
+        justify-content: space-between;
+        padding: 0 20px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 18px;
+        background: rgba(18, 22, 32, 0.46);
+        box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
+        backdrop-filter: blur(18px) saturate(1.25);
+        font-size: 20px;
+        font-weight: 650;
       }
 
-      #github-link svg {
-        flex-shrink: 0;
+      .desktop-time {
+        font-variant-numeric: tabular-nums;
+        opacity: 0.86;
+      }
+
+      .glass-window {
+        position: absolute;
+        left: 92px;
+        top: 150px;
+        width: 610px;
+        min-height: 390px;
+        padding: 30px;
+        border: 1px solid rgba(255, 255, 255, 0.26);
+        border-radius: 28px;
+        background: rgba(13, 18, 28, 0.5);
+        box-shadow:
+          0 30px 90px rgba(0, 0, 0, 0.38),
+          inset 0 1px 0 rgba(255, 255, 255, 0.24);
+        backdrop-filter: blur(28px) saturate(1.35);
+      }
+
+      .window-controls {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 34px;
+      }
+
+      .window-controls span {
+        width: 17px;
+        height: 17px;
+        border-radius: 999px;
+        background: #ff5f57;
+      }
+
+      .window-controls span:nth-child(2) {
+        background: #febc2e;
+      }
+
+      .window-controls span:nth-child(3) {
+        background: #28c840;
+      }
+
+      .glass-window h1 {
+        margin: 0 0 18px;
+        font-size: 64px;
+        line-height: 0.94;
+        letter-spacing: 0;
+      }
+
+      .glass-window p {
+        max-width: 440px;
+        margin: 0;
+        color: rgba(255, 255, 255, 0.78);
+        font-size: 24px;
+        line-height: 1.35;
+      }
+
+      .dock {
+        position: absolute;
+        left: 50%;
+        bottom: 34px;
+        display: flex;
+        gap: 18px;
+        padding: 18px 22px;
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        border-radius: 30px;
+        background: rgba(20, 24, 34, 0.45);
+        backdrop-filter: blur(24px) saturate(1.3);
+        transform: translateX(-50%);
+      }
+
+      .dock span {
+        width: 58px;
+        height: 58px;
+        border-radius: 16px;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+      }
+
+      .dock span:nth-child(1) {
+        background: linear-gradient(135deg, #7dd3fc, #2563eb);
+      }
+
+      .dock span:nth-child(2) {
+        background: linear-gradient(135deg, #f9a8d4, #7c3aed);
+      }
+
+      .dock span:nth-child(3) {
+        background: linear-gradient(135deg, #86efac, #0f766e);
+      }
+
+      .dock span:nth-child(4) {
+        background: linear-gradient(135deg, #fde68a, #ea580c);
+      }
+
+      .model-credit {
+        position: fixed;
+        right: 18px;
+        bottom: 14px;
+        z-index: 2;
+        color: rgba(17, 17, 17, 0.62);
+        font-size: 11px;
+        text-decoration: none;
+      }
+
+      #scene-status {
+        position: fixed;
+        left: 18px;
+        bottom: 14px;
+        z-index: 2;
+        color: rgba(17, 17, 17, 0.72);
+        font-size: 12px;
       }
     </style>
   </head>
   <body>
-    <canvas id="canvas" layoutsubtree>
-      <!-- Background image -->
-      <div class="background" id="background">
-        <img src="./assets/background.png" alt="Background" />
-      </div>
+    <main id="scene-root"></main>
 
-      <!-- Glass panel with content (top center via CSS) -->
-      <div id="content" class="liquid-glass">Liquid Glass HTML in Canvas</div>
-
-      <!-- GitHub link (bottom left) -->
-      <a id="github-link" class="liquid-glass" href="https://github.com" target="_blank">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-          <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.387.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.387-1.333-1.756-1.333-1.756-1.09-.745.083-.73.083-.73 1.205.085 1.84 1.237 1.84 1.237 1.07 1.834 2.806 1.304 3.49.997.108-.775.42-1.305.763-1.605-2.665-.3-5.467-1.332-5.467-5.93 0-1.31.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.3 1.23A11.5 11.5 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.29-1.552 3.297-1.23 3.297-1.23.653 1.652.242 2.873.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.625-5.479 5.921.43.372.823 1.102.823 2.222 0 1.606-.015 2.896-.015 3.293 0 .322.216.694.825.576C20.565 21.795 24 17.298 24 12c0-6.63-5.37-12-12-12z"/>
-        </svg>
-        <span>View on GitHub</span>
-      </a>
+    <canvas id="html-source" width="1536" height="1024" layoutsubtree>
+      <section id="computer-screen">
+        <div class="desktop-sheen"></div>
+        <div class="desktop-bar">
+          <span>Liquid Glass</span>
+          <span class="desktop-time">Fri 2:42 PM</span>
+        </div>
+        <article class="glass-window">
+          <div class="window-controls"><span></span><span></span><span></span></div>
+          <h1>HTML on the MacBook screen.</h1>
+          <p>The desktop is real DOM rendered through Three.js HTMLTexture, with the project background image underneath.</p>
+        </article>
+        <nav class="dock">
+          <span></span><span></span><span></span><span></span>
+        </nav>
+      </section>
     </canvas>
+
+    <a
+      class="model-credit"
+      href="https://sketchfab.com/3d-models/macbook-pro-m3-16-inch-2024-8e34fc2b303144f78490007d91ff57c4"
+      target="_blank"
+    >
+      MacBook model by jackbaeten
+    </a>
+    <div id="scene-status">Loading MacBook...</div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>
