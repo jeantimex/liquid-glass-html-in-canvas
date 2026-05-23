@@ -1,4 +1,5 @@
 import { mountMacBookScene } from './macbook-scene';
+import { mountDesktopBrowser } from './desktop-browser';
 import { LiquidGlassCanvas } from './liquid-glass';
 import { mountLiquidGlassGui } from './liquid-glass-gui';
 
@@ -11,9 +12,27 @@ if (!sceneRoot || !(htmlSource instanceof HTMLCanvasElement)) {
 
 const sceneContainer: HTMLElement = sceneRoot;
 const sourceCanvas: HTMLCanvasElement = htmlSource;
+const desktopTime = sourceCanvas.querySelector<HTMLElement>('.desktop-time');
 
 const lg = new LiquidGlassCanvas(sourceCanvas);
 mountLiquidGlassGui(sourceCanvas);
+mountDesktopBrowser(sourceCanvas);
+
+function updateDesktopTime() {
+  if (!desktopTime) return;
+
+  desktopTime.textContent = new Intl.DateTimeFormat(undefined, {
+    weekday: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(new Date());
+
+  (sourceCanvas as HTMLCanvasElement & { requestPaint?: () => void }).requestPaint?.();
+}
+
+updateDesktopTime();
+setInterval(updateDesktopTime, 1000);
 
 async function init() {
   const success = await lg.waitForInit();

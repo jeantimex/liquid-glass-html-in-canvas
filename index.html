@@ -149,17 +149,95 @@
         line-height: 1.35;
       }
 
+      .browser-window {
+        position: absolute;
+        left: 730px;
+        top: 130px;
+        width: 720px;
+        height: 560px;
+        z-index: 4;
+        border-radius: 26px;
+        overflow: hidden;
+        background: rgba(244, 247, 252, 0.92);
+        box-shadow: 0 26px 80px rgba(0, 0, 0, 0.34);
+      }
+
+      .browser-toolbar {
+        height: 72px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 0 18px;
+        background: rgba(231, 236, 245, 0.94);
+      }
+
+      .browser-controls {
+        display: flex;
+        gap: 8px;
+        flex: 0 0 auto;
+      }
+
+      .browser-controls span {
+        width: 14px;
+        height: 14px;
+        border-radius: 999px;
+        background: #ff5f57;
+      }
+
+      .browser-controls span:nth-child(2) {
+        background: #febc2e;
+      }
+
+      .browser-controls span:nth-child(3) {
+        background: #28c840;
+      }
+
+      .browser-address {
+        height: 38px;
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        border-radius: 999px;
+        background: white;
+        color: #172033;
+        font-size: 15px;
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+      }
+
+      .browser-address.is-active {
+        box-shadow:
+          inset 0 0 0 2px rgba(59, 130, 246, 0.8),
+          0 0 0 4px rgba(59, 130, 246, 0.18);
+      }
+
+      .browser-address.is-empty {
+        color: #7c8798;
+      }
+
+      .browser-frame {
+        width: 100%;
+        height: calc(100% - 72px);
+        overflow: hidden;
+        background: white;
+      }
+
       .dock {
         position: absolute;
-        left: 50%;
+        left: calc(50% - 165px);
         bottom: 34px;
+        width: 330px;
         display: flex;
         gap: 18px;
         padding: 18px 22px;
         border: 0;
         border-radius: 30px;
         background: rgba(20, 24, 34, 0.45);
-        transform: translateX(-50%);
 
         --lg-blur: 0.2;
         --lg-refraction: 0.4;
@@ -170,23 +248,27 @@
         width: 58px;
         height: 58px;
         border-radius: 16px;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
       }
 
-      .dock span:nth-child(1) {
-        background: linear-gradient(135deg, #7dd3fc, #2563eb);
+      .dock img {
+        width: 58px;
+        height: 58px;
+        display: block;
+        object-fit: contain;
       }
 
-      .dock span:nth-child(2) {
-        background: linear-gradient(135deg, #f9a8d4, #7c3aed);
-      }
-
-      .dock span:nth-child(3) {
-        background: linear-gradient(135deg, #86efac, #0f766e);
-      }
-
-      .dock span:nth-child(4) {
-        background: linear-gradient(135deg, #fde68a, #ea580c);
+      .demo-credit {
+        position: fixed;
+        left: 18px;
+        bottom: 14px;
+        z-index: 2;
+        color: rgba(17, 17, 17, 0.62);
+        font-size: 11px;
+        text-decoration: none;
       }
 
       .model-credit {
@@ -222,7 +304,6 @@
         <div class="desktop-sheen"></div>
       </div>
       <div class="desktop-bar liquid-glass">
-        <span>Liquid Glass</span>
         <span class="desktop-time">Fri 2:42 PM</span>
       </div>
       <article class="glass-window liquid-glass">
@@ -231,10 +312,34 @@
         <p>The desktop is real DOM rendered through Three.js HTMLTexture, with the project background image underneath.</p>
       </article>
       <nav class="dock liquid-glass">
-        <span></span><span></span><span></span><span></span>
+        <span aria-label="Finder">
+          <img src="/assets/finder.png" alt="" />
+        </span>
+        <span aria-label="Chrome">
+          <img src="/assets/chrome.png" alt="" />
+        </span>
+        <span aria-label="Mail">
+          <img src="/assets/mail.png" alt="" />
+        </span>
+        <span aria-label="Three.js">
+          <img src="/assets/threejs.png" alt="" />
+        </span>
       </nav>
+      <section class="browser-window" aria-label="Chrome browser">
+        <div class="browser-toolbar">
+          <div class="browser-controls"><span></span><span></span><span></span></div>
+          <div class="browser-address" role="textbox" aria-label="Address bar"></div>
+        </div>
+        <div class="browser-frame" role="document"></div>
+      </section>
     </canvas>
-
+    <a
+      class="demo-credit"
+      href="https://github.com/jeantimex/liquid-glass-html-in-canvas"
+      target="_blank"
+    >
+      Demo by jeantimex
+    </a>
     <a
       class="model-credit"
       href="https://sketchfab.com/3d-models/macbook-pro-m3-16-inch-2024-8e34fc2b303144f78490007d91ff57c4"
